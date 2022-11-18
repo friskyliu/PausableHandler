@@ -3,7 +3,7 @@ package com.frisky.utils
 import android.os.*
 import android.util.Printer
 import androidx.annotation.RequiresApi
-import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CopyOnWriteArrayList
 
 @Suppress("unused")
 class PausableHandler {
@@ -113,10 +113,19 @@ class PausableHandler {
     open fun sendMessageAtTime(msg: Message, uptimeMillis: Long): Boolean = handler.sendMessageAtTime(msg, uptimeMillis)
 
     fun sendMessageAtFrontOfQueue(msg: Message): Boolean {
-        TODO("to do")
+        if (handler.isPaused()) {
+            handler.addWaitingFirst(msg)
+            return true
+        }
+        return handler.sendMessageAtFrontOfQueue(msg)
     }
 
     fun executeOrSendMessage(msg: Message): Boolean {
+        /* if (handler.isPaused()) {
+             handler.sendMessage(msg)
+             return true
+         }
+         return handler.executeOrSendMessage(msg) */
         TODO("to do")
     }
 
@@ -191,8 +200,8 @@ class PausableHandler {
     private class InnerHandler : Handler {
         private var startPauseTime = 0L
         private var sumPauseDuration = 0L
-        private val waitingMap = ConcurrentHashMap<Message, WaitingMsgTime>()
-        private val runningMap = ConcurrentHashMap<Message, RunningMsgTime>()
+        private val waitingQueue = CopyOnWriteArrayList<Pair<Message, WaitingMsgTime>>()
+        private val runningQueue = CopyOnWriteArrayList<Pair<Message, RunningMsgTime>>()
 
         constructor() : super()
         constructor(callback: Callback?) : super(callback)
@@ -207,9 +216,10 @@ class PausableHandler {
                 startPauseTime = 0L
             }
 
-            for (msg in waitingMap.keys()) {
-                val waitingMsgTime = waitingMap.remove(msg) ?: continue
-                sendMessageAtTime(msg, SystemClock.uptimeMillis() + waitingMsgTime.delayTime)
+            var pair = waitingQueue.removeFirstOrNull()
+            while (pair != null) {
+                sendMessageAtTime(pair.first, SystemClock.uptimeMillis() + pair.second.delayTime)
+                pair = waitingQueue.removeFirstOrNull()
             }
 
             return pauseDuration
@@ -223,16 +233,16 @@ class PausableHandler {
 
         override fun sendMessageAtTime(msg: Message, uptimeMillis: Long): Boolean {
             if (startPauseTime == 0L) {
-                runningMap[msg] = RunningMsgTime(uptimeMillis, sumPauseDuration)
+                runningQueue.add(Pair(msg, RunningMsgTime(uptimeMillis, sumPauseDuration)))
                 return super.sendMessageAtTime(msg, uptimeMillis)
             }
 
-            waitingMap[msg] = WaitingMsgTime(uptimeMillis - SystemClock.uptimeMillis())
+            waitingQueue.add(Pair(msg, WaitingMsgTime(uptimeMillis - SystemClock.uptimeMillis())))
             return true
         }
 
         override fun dispatchMessage(msg: Message) {
-            val runningTime = runningMap.remove(msg)
+            val runningTime = runningQueue.ktRemoveIf { it.first === msg }?.second
             if (runningTime == null) {
                 super.dispatchMessage(msg)
                 return
@@ -242,7 +252,7 @@ class PausableHandler {
                 val delayTime = SystemClock.uptimeMillis() - startPauseTime + sumPauseDuration - runningTime.lastSumPauseTime
 
                 val newMsg = Message.obtain(msg)
-                waitingMap[newMsg] = WaitingMsgTime(delayTime)
+                waitingQueue.add(Pair(newMsg, WaitingMsgTime(delayTime)))
                 return
             }
 
@@ -257,75 +267,73 @@ class PausableHandler {
             super.dispatchMessage(msg)
         }
 
-        fun removeCacheObj(token: Any?, equal: Boolean = false) {
-            for (msg in waitingMap.keys()) {
-                if (objEquals(msg.obj, token, equal)) {
-                    waitingMap.remove(msg)
-                }
-            }
+        fun isPaused(): Boolean {
+            return startPauseTime != 0L
+        }
 
-            for (msg in runningMap.keys()) {
-                if (objEquals(msg.obj, token, equal)) {
-                    runningMap.remove(msg)
-                }
+        fun addWaitingFirst(msg: Message): Boolean {
+            waitingQueue.add(0, Pair(msg, WaitingMsgTime(0)))
+            return true
+        }
+
+        fun removeCacheObj(token: Any?, equal: Boolean = false) {
+            waitingQueue.removeAll {
+                objEquals(it.first.obj, token, equal)
+            }
+            runningQueue.removeAll {
+                objEquals(it.first.obj, token, equal)
             }
         }
 
         fun removeCacheWhat(what: Int, token: Any?, equal: Boolean = false) {
-            for (msg in waitingMap.keys()) {
-                if (msg.what == what && objEquals(msg.obj, token, equal)) {
-                    waitingMap.remove(msg)
-                }
+            waitingQueue.removeAll {
+                val msg = it.first
+                msg.what == what && objEquals(msg.obj, token, equal)
             }
 
-            for (msg in runningMap.keys()) {
-                if (msg.what == what && objEquals(msg.obj, token, equal)) {
-                    runningMap.remove(msg)
-                }
+            runningQueue.removeAll {
+                val msg = it.first
+                msg.what == what && objEquals(msg.obj, token, equal)
             }
         }
 
         fun removeCacheCallback(runnable: Runnable, token: Any?, equal: Boolean = false) {
-            for (msg in waitingMap.keys()) {
-                if (msg.callback === runnable && objEquals(msg.obj, token, equal)) {
-                    waitingMap.remove(msg)
-                }
+            waitingQueue.removeAll {
+                val msg = it.first
+                msg.callback === runnable && objEquals(msg.obj, token, equal)
             }
 
-            for (msg in runningMap.keys()) {
-                if (msg.callback === runnable && objEquals(msg.obj, token, equal)) {
-                    runningMap.remove(msg)
-                }
+            runningQueue.removeAll {
+                val msg = it.first
+                msg.callback === runnable && objEquals(msg.obj, token, equal)
             }
         }
 
         fun hasMessageCacheObj(token: Any?, equal: Boolean = false): Boolean {
-            for (msg in waitingMap.keys()) {
-                if (objEquals(msg.obj, token, equal)) {
-                    return true
-                }
-            }
-
-            return false
+            return waitingQueue.find { objEquals(it.first.obj, token, equal) } != null
         }
 
         fun hasMessageCacheWhat(what: Int, token: Any?, equal: Boolean = false): Boolean {
-            for (msg in waitingMap.keys()) {
-                if (msg.what == what && objEquals(msg.obj, token, equal)) {
-                    return true
-                }
-            }
-            return false
+            return waitingQueue.find {
+                val msg = it.first
+                msg.what == what && objEquals(msg.obj, token, equal)
+            } != null
         }
 
-
         fun hasMessageCacheCallback(runnable: Runnable, token: Any?, equal: Boolean = false): Boolean {
-            for (msg in waitingMap.keys()) {
-                if (msg.callback === runnable && objEquals(msg.obj, token, equal)) {
-                    return true
+            return waitingQueue.find {
+                val msg = it.first
+                msg.callback === runnable && objEquals(msg.obj, token, equal)
+            } != null
+        }
+
+        private fun <T> MutableList<T>.ktRemoveIf(condition: (t: T) -> Boolean): T? {
+            this.forEach {
+                if (condition(it) && this.remove(it)) {
+                    return it
                 }
             }
-            return false
+            return null
         }
 
         private fun objEquals(obj: Any?, token: Any?, equal: Boolean): Boolean {
