@@ -6,7 +6,10 @@ package com.frisky.utils
 import android.os.*
 import android.util.Printer
 import androidx.annotation.RequiresApi
-import java.util.concurrent.CopyOnWriteArrayList
+import java.util.LinkedList
+import java.util.concurrent.locks.ReentrantReadWriteLock
+import kotlin.concurrent.read
+import kotlin.concurrent.write
 
 @Suppress("unused")
 class PausableHandler {
@@ -73,7 +76,8 @@ class PausableHandler {
 
     fun obtainMessage(what: Int, arg1: Int, arg2: Int): Message = handler.obtainMessage(what, arg1, arg2)
 
-    fun obtainMessage(what: Int, arg1: Int, arg2: Int, obj: Any?): Message = handler.obtainMessage(what, arg1, arg2, obj)
+    fun obtainMessage(what: Int, arg1: Int, arg2: Int, obj: Any?): Message =
+        handler.obtainMessage(what, arg1, arg2, obj)
 
     fun post(r: Runnable): Boolean = handler.post(r)
 
@@ -207,8 +211,11 @@ class PausableHandler {
     private class InnerHandler : Handler {
         private var startPauseTime = 0L
         private var sumPauseDuration = 0L
-        private val waitingQueue = CopyOnWriteArrayList<Pair<Message, WaitingMsgTime>>()
-        private val runningQueue = CopyOnWriteArrayList<Pair<Message, RunningMsgTime>>()
+        private val waitingQueue = LinkedList<Pair<Message, WaitingMsgTime>>()
+        private val runningQueue = LinkedList<Pair<Message, RunningMsgTime>>()
+        private var waitingLock = ReentrantReadWriteLock()
+        private var runningLock = ReentrantReadWriteLock()
+
 
         constructor() : super()
         constructor(callback: Callback?) : super(callback)
@@ -223,12 +230,13 @@ class PausableHandler {
                 startPauseTime = 0L
             }
 
-            var pair = waitingQueue.removeFirstOrNull()
-            while (pair != null) {
-                sendMessageAtTime(pair.first, SystemClock.uptimeMillis() + pair.second.delayTime)
-                pair = waitingQueue.removeFirstOrNull()
+            waitingLock.write {
+                var pair = waitingQueue.removeFirstOrNull()
+                while (pair != null) {
+                    sendMessageAtTime(pair.first, SystemClock.uptimeMillis() + pair.second.delayTime)
+                    pair = waitingQueue.removeFirstOrNull()
+                }
             }
-
             return pauseDuration
         }
 
@@ -240,11 +248,15 @@ class PausableHandler {
 
         override fun sendMessageAtTime(msg: Message, uptimeMillis: Long): Boolean {
             if (startPauseTime == 0L) {
-                runningQueue.add(Pair(msg, RunningMsgTime(uptimeMillis, sumPauseDuration)))
+                runningLock.write {
+                    runningQueue.add(Pair(msg, RunningMsgTime(uptimeMillis, sumPauseDuration)))
+                }
                 return super.sendMessageAtTime(msg, uptimeMillis)
             }
 
-            waitingQueue.add(Pair(msg, WaitingMsgTime(uptimeMillis - SystemClock.uptimeMillis())))
+            waitingLock.write {
+                waitingQueue.add(Pair(msg, WaitingMsgTime(uptimeMillis - SystemClock.uptimeMillis())))
+            }
             return true
         }
 
@@ -259,7 +271,9 @@ class PausableHandler {
                 val delayTime = SystemClock.uptimeMillis() - startPauseTime + sumPauseDuration - runningTime.lastSumPauseTime
 
                 val newMsg = Message.obtain(msg)
-                waitingQueue.add(Pair(newMsg, WaitingMsgTime(delayTime)))
+                waitingLock.write {
+                    waitingQueue.add(Pair(newMsg, WaitingMsgTime(delayTime)))
+                }
                 return
             }
 
@@ -279,64 +293,92 @@ class PausableHandler {
         }
 
         fun addWaitingFirst(msg: Message): Boolean {
-            waitingQueue.add(0, Pair(msg, WaitingMsgTime(0)))
+            waitingLock.write {
+                waitingQueue.add(0, Pair(msg, WaitingMsgTime(0)))
+            }
             return true
         }
 
         fun removeCacheObj(token: Any?, equal: Boolean = false) {
-            waitingQueue.removeAll {
-                objEquals(it.first.obj, token, equal)
+            waitingLock.write {
+                waitingQueue.removeAll {
+                    objEquals(it.first.obj, token, equal)
+                }
             }
-            runningQueue.removeAll {
-                objEquals(it.first.obj, token, equal)
+            runningLock.write {
+                runningQueue.removeAll {
+                    objEquals(it.first.obj, token, equal)
+                }
             }
         }
 
         fun removeCacheWhat(what: Int, token: Any?, equal: Boolean = false) {
-            waitingQueue.removeAll {
-                val msg = it.first
-                msg.what == what && objEquals(msg.obj, token, equal)
+            waitingLock.write {
+                waitingQueue.removeAll {
+                    val msg = it.first
+                    msg.what == what && objEquals(msg.obj, token, equal)
+                }
             }
 
-            runningQueue.removeAll {
-                val msg = it.first
-                msg.what == what && objEquals(msg.obj, token, equal)
+            runningLock.write {
+                runningQueue.removeAll {
+                    val msg = it.first
+                    msg.what == what && objEquals(msg.obj, token, equal)
+                }
             }
         }
 
         fun removeCacheCallback(runnable: Runnable, token: Any?, equal: Boolean = false) {
-            waitingQueue.removeAll {
-                val msg = it.first
-                msg.callback === runnable && objEquals(msg.obj, token, equal)
+            waitingLock.write {
+                waitingQueue.removeAll {
+                    val msg = it.first
+                    msg.callback === runnable && objEquals(msg.obj, token, equal)
+                }
             }
 
-            runningQueue.removeAll {
-                val msg = it.first
-                msg.callback === runnable && objEquals(msg.obj, token, equal)
+            runningLock.write {
+                runningQueue.removeAll {
+                    val msg = it.first
+                    msg.callback === runnable && objEquals(msg.obj, token, equal)
+                }
             }
         }
 
         fun hasMessageCacheObj(token: Any?, equal: Boolean = false): Boolean {
-            return waitingQueue.find { objEquals(it.first.obj, token, equal) } != null
+            waitingLock.read {
+                return waitingQueue.find { objEquals(it.first.obj, token, equal) } != null
+            }
         }
 
         fun hasMessageCacheWhat(what: Int, token: Any?, equal: Boolean = false): Boolean {
-            return waitingQueue.find {
-                val msg = it.first
-                msg.what == what && objEquals(msg.obj, token, equal)
-            } != null
+            waitingLock.read {
+                return waitingQueue.find {
+                    val msg = it.first
+                    msg.what == what && objEquals(msg.obj, token, equal)
+                } != null
+            }
         }
 
         fun hasMessageCacheCallback(runnable: Runnable, token: Any?, equal: Boolean = false): Boolean {
-            return waitingQueue.find {
-                val msg = it.first
-                msg.callback === runnable && objEquals(msg.obj, token, equal)
-            } != null
+            waitingLock.read {
+                return waitingQueue.find {
+                    val msg = it.first
+                    msg.callback === runnable && objEquals(msg.obj, token, equal)
+                } != null
+            }
         }
 
-        fun runningTaskSize() = runningQueue.size
+        fun runningTaskSize(): Int {
+            runningLock.read {
+                return runningQueue.size
+            }
+        }
 
-        fun waitingTaskSize() = waitingQueue.size
+        fun waitingTaskSize(): Int {
+            waitingLock.read {
+                return waitingQueue.size
+            }
+        }
 
         private fun <T> MutableList<T>.ktRemoveIf(condition: (t: T) -> Boolean): T? {
             this.forEach {
