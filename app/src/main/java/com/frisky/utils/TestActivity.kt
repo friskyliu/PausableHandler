@@ -27,11 +27,13 @@ class TestActivity : AppCompatActivity() {
 
         btnStart = findViewById(R.id.btn_start)
         findViewById<Button>(R.id.btn_pause_auto).setOnClickListener {
+            printInfo("PAUSE Start")
             pausableHandler.pause()
-            printInfo("PAUSE")
+            printInfo("PAUSE End")
             testHandler.postDelayed({
-                printInfo("RESUME")
-                pausableHandler.resume()
+                printInfo("RESUME Start")
+                val pauseDuration = pausableHandler.resume()
+                printInfo("RESUME End, pauseDuration:$pauseDuration")
             }, 3000)
         }
 
@@ -42,6 +44,13 @@ class TestActivity : AppCompatActivity() {
             testHandler.postDelayed({
                 testPauseableHandler("2 -> ")
             }, 3000)
+            testHandler.postDelayed({
+                printInfo("-END-")
+            }, 15000)
+//            testHandler.postDelayed({
+//                pausableHandler.removeCallbacksAndMessages(null)
+//                printInfo("REMOVE ALL")
+//            }, 6000)
         }
 
         tvInfo = findViewById(R.id.tv_info)
@@ -60,11 +69,11 @@ class TestActivity : AppCompatActivity() {
 
         pausableHandler.postDelayed({
             printInfo("$tag  postDelayed 6000")
-        }, 6000)
+        }, 4000)
 
         pausableHandler.postDelayed({
             printInfo("$tag  postDelayed 12000")
-        }, 12000)
+        }, 8000)
     }
 
     override fun onResume() {
@@ -83,7 +92,7 @@ class TestActivity : AppCompatActivity() {
     }
 
     private fun printInfo(msg: String) {
-        val tmp = "${decFormat.format(SystemClock.uptimeMillis() - execStart)}:$msg \n"
+        val tmp = "${decFormat.format(SystemClock.uptimeMillis() - execStart)}   ${pausableHandler.runningTaskSize()}/${pausableHandler.waitingTaskSize()}:$msg"
         val txt = "${tvInfo.text} $tmp \n"
         tvInfo.text = txt
         Log.e("PauseableHandler", tmp)

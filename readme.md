@@ -55,6 +55,10 @@ class PausableHandler {
 
     fun pause() = handler.pause()
 
+    fun runningTaskSize() = handler.runningTaskSize()
+
+    fun waitingTaskSize() = handler.waitingTaskSize()
+
     open fun dispatchMessage(msg: Message) = handler.dispatchMessage(msg)
 
     open fun handleMessage(msg: Message) = handler.handleMessage(msg)
@@ -329,6 +333,10 @@ class PausableHandler {
                 msg.callback === runnable && objEquals(msg.obj, token, equal)
             } != null
         }
+
+        fun runningTaskSize() = runningQueue.size
+
+        fun waitingTaskSize() = waitingQueue.size
 
         private fun <T> MutableList<T>.ktRemoveIf(condition: (t: T) -> Boolean): T? {
             this.forEach {
