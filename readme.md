@@ -261,7 +261,9 @@ class PausableHandler {
         }
 
         override fun dispatchMessage(msg: Message) {
-            val runningTime = runningQueue.ktRemoveIf { it.first === msg }?.second
+            val runningTime = runningLock.write {
+                runningQueue.ktRemoveIf { it.first === msg }?.second
+            }
             if (runningTime == null) {
                 super.dispatchMessage(msg)
                 return
