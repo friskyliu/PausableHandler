@@ -51,6 +51,11 @@ class TestActivity : AppCompatActivity() {
 //                pausableHandler.removeCallbacksAndMessages(null)
 //                printInfo("REMOVE ALL")
 //            }, 6000)
+            pausableHandler.postDelayed({
+                printInfo("Thread.sleep(6000) start")
+                SystemClock.sleep(6000)
+                printInfo("Thread.sleep(6000) end")
+            }, 1000)
         }
 
         tvInfo = findViewById(R.id.tv_info)

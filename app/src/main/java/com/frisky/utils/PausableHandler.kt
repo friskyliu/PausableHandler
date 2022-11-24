@@ -1,17 +1,31 @@
 package com.frisky.utils
 
 import android.os.*
+import android.util.Log
 import android.util.Printer
 import androidx.annotation.RequiresApi
-import java.util.LinkedList
+import java.util.*
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kotlin.concurrent.read
 import kotlin.concurrent.write
 
+
 @Suppress("unused")
 class PausableHandler {
     companion object {
+        private const val ANR_CHECK = false
+        private const val ANR_CHECK_TIME = 3000L
         private var MAIN_THREAD_HANDLER: PausableHandler? = null
+        private lateinit var anrHandler: Handler
+        private lateinit var anrThread: HandlerThread
+
+        init {
+            if (ANR_CHECK) {
+                anrThread = HandlerThread("ANR-Check")
+                anrThread.start()
+                anrHandler = Handler(anrThread.looper)
+            }
+        }
 
         @JvmStatic
         fun createAsync(looper: Looper): PausableHandler = PausableHandler(looper)
@@ -260,7 +274,7 @@ class PausableHandler {
                 runningQueue.ktRemoveIf { it.first === msg }?.second
             }
             if (runningTime == null) {
-                super.dispatchMessage(msg)
+                dispatchMessageNow(msg)
                 return
             }
 
@@ -281,8 +295,20 @@ class PausableHandler {
                 return
             }
 
+            dispatchMessageNow(msg)
+        }
 
-            super.dispatchMessage(msg)
+        private fun dispatchMessageNow(msg: Message) {
+            if (ANR_CHECK) {
+                val anrCheckRunnable = Runnable {
+                    Log.e("PausableHandler", "error", ANRError.New(ANR_CHECK_TIME, looper.thread))
+                }
+                anrHandler.postDelayed(anrCheckRunnable, ANR_CHECK_TIME)
+                super.dispatchMessage(msg)
+                anrHandler.removeCallbacks(anrCheckRunnable)
+            } else {
+                super.dispatchMessage(msg)
+            }
         }
 
         fun isPaused(): Boolean {
