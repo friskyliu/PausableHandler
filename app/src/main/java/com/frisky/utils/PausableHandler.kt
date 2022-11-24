@@ -344,14 +344,14 @@ class PausableHandler {
         }
 
         fun hasMessageCacheObj(token: Any?, equal: Boolean = false): Boolean {
-            waitingLock.read {
-                return waitingQueue.find { objEquals(it.first.obj, token, equal) } != null
+            return waitingLock.read {
+                waitingQueue.find { objEquals(it.first.obj, token, equal) } != null
             }
         }
 
         fun hasMessageCacheWhat(what: Int, token: Any?, equal: Boolean = false): Boolean {
-            waitingLock.read {
-                return waitingQueue.find {
+            return waitingLock.read {
+                waitingQueue.find {
                     val msg = it.first
                     msg.what == what && objEquals(msg.obj, token, equal)
                 } != null
@@ -359,8 +359,8 @@ class PausableHandler {
         }
 
         fun hasMessageCacheCallback(runnable: Runnable, token: Any?, equal: Boolean = false): Boolean {
-            waitingLock.read {
-                return waitingQueue.find {
+            return waitingLock.read {
+                waitingQueue.find {
                     val msg = it.first
                     msg.callback === runnable && objEquals(msg.obj, token, equal)
                 } != null
@@ -368,14 +368,14 @@ class PausableHandler {
         }
 
         fun runningTaskSize(): Int {
-            runningLock.read {
-                return runningQueue.size
+            return runningLock.read {
+                runningQueue.size
             }
         }
 
         fun waitingTaskSize(): Int {
-            waitingLock.read {
-                return waitingQueue.size
+            return waitingLock.read {
+                waitingQueue.size
             }
         }
 
