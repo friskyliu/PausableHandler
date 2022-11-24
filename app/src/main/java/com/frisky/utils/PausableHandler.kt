@@ -227,12 +227,10 @@ class PausableHandler {
                 startPauseTime = 0L
             }
 
-            waitingLock.write {
-                var pair = waitingQueue.removeFirstOrNull()
-                while (pair != null) {
-                    sendMessageAtTime(pair.first, SystemClock.uptimeMillis() + pair.second.delayTime)
-                    pair = waitingQueue.removeFirstOrNull()
-                }
+            var pair = waitingLock.write { waitingQueue.removeFirstOrNull() }
+            while (pair != null) {
+                sendMessageAtTime(pair.first, SystemClock.uptimeMillis() + pair.second.delayTime)
+                pair = waitingLock.write { waitingQueue.removeFirstOrNull() }
             }
             return pauseDuration
         }
