@@ -13,17 +13,19 @@ import kotlin.concurrent.write
 @Suppress("unused")
 class PausableHandler {
     companion object {
-        private const val ANR_CHECK = false
-        private const val ANR_CHECK_TIME = 3000L
+        private const val TASK_BLOCKING_WATCH = false
+        private const val TASK_BLOCKING_DURATION = 3000L   /* milliseconds */
+
+        private lateinit var blockingWatchHandler: Handler
+        private lateinit var blockingWatchThread: HandlerThread
+
         private var MAIN_THREAD_HANDLER: PausableHandler? = null
-        private lateinit var anrHandler: Handler
-        private lateinit var anrThread: HandlerThread
 
         init {
-            if (ANR_CHECK) {
-                anrThread = HandlerThread("ANR-Check")
-                anrThread.start()
-                anrHandler = Handler(anrThread.looper)
+            if (TASK_BLOCKING_WATCH) {
+                blockingWatchThread = HandlerThread("TASK-BLOCKING-WATCH")
+                blockingWatchThread.start()
+                blockingWatchHandler = Handler(blockingWatchThread.looper)
             }
         }
 
@@ -69,9 +71,11 @@ class PausableHandler {
 
     fun pause() = handler.pause()
 
-    fun runningTaskSize() = handler.runningTaskSize()
+    fun isPaused(): Boolean = handler.isPaused()
 
-    fun waitingTaskSize() = handler.waitingTaskSize()
+    fun runningTaskSize(): Int = handler.runningTaskSize()
+
+    fun waitingTaskSize(): Int = handler.waitingTaskSize()
 
     open fun dispatchMessage(msg: Message) = handler.dispatchMessage(msg)
 
@@ -279,7 +283,8 @@ class PausableHandler {
             }
 
             if (startPauseTime != 0L) {
-                val delayTime = SystemClock.uptimeMillis() - startPauseTime + sumPauseDuration - runningTime.lastSumPauseTime
+                val delayTime =
+                    SystemClock.uptimeMillis() - startPauseTime + sumPauseDuration - runningTime.lastSumPauseTime
 
                 val newMsg = Message.obtain(msg)
                 waitingLock.write {
@@ -299,13 +304,13 @@ class PausableHandler {
         }
 
         private fun dispatchMessageNow(msg: Message) {
-            if (ANR_CHECK) {
-                val anrCheckRunnable = Runnable {
-                    Log.e("PausableHandler", "error", ANRError.New(ANR_CHECK_TIME, looper.thread))
+            if (TASK_BLOCKING_WATCH) {
+                val watchRunnable = Runnable {
+                    Log.e("PausableHandler", "TASK-BLOCKING-WATCH", TaskBlockingError.create(TASK_BLOCKING_DURATION, looper.thread))
                 }
-                anrHandler.postDelayed(anrCheckRunnable, ANR_CHECK_TIME)
+                blockingWatchHandler.postDelayed(watchRunnable, TASK_BLOCKING_DURATION)
                 super.dispatchMessage(msg)
-                anrHandler.removeCallbacks(anrCheckRunnable)
+                blockingWatchHandler.removeCallbacks(watchRunnable)
             } else {
                 super.dispatchMessage(msg)
             }
@@ -418,6 +423,33 @@ class PausableHandler {
             }
 
             return token == null || token === obj
+        }
+    }
+
+    private class TaskBlockingError(throwable: Throwable, duration: Long) :
+        Error("Task Blocking for at least $duration ms.", throwable) {
+
+        companion object {
+            fun create(duration: Long, thread: Thread): TaskBlockingError {
+                val name = "${thread.name} (state = ${thread.state})"
+                return TaskBlockingError(TmpError(thread.stackTrace).InnerError(name), duration)
+            }
+        }
+
+        class TmpError(private val _stackTrace: Array<StackTraceElement>) {
+            inner class InnerError(_name: String) :
+                Throwable(_name, null) {
+
+                override fun fillInStackTrace(): Throwable {
+                    stackTrace = _stackTrace
+                    return this
+                }
+            }
+        }
+
+        override fun fillInStackTrace(): Throwable {
+            stackTrace = arrayOf()
+            return this
         }
     }
 }
