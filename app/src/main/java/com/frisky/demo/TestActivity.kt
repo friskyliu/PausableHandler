@@ -1,13 +1,11 @@
-package com.frisky.utils
+package com.frisky.demo
 
+import android.os.*
 import androidx.appcompat.app.AppCompatActivity
-import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
-import android.os.SystemClock
 import android.util.Log
 import android.widget.Button
 import android.widget.TextView
+import com.frisky.utils.PausableHandler
 import com.frisky.utils.pauseablehandler.R
 import java.text.DecimalFormat
 
@@ -22,7 +20,21 @@ class TestActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-        pausableHandler = PausableHandler(Looper.getMainLooper())
+        pausableHandler = object : PausableHandler(Looper.getMainLooper()) {
+            override fun handleMessage(msg: Message) {
+                printInfo("handleMessage:${msg.what}")
+            }
+
+            override fun sendMessageAtTime(msg: Message, uptimeMillis: Long): Boolean {
+                printInfo("sendMessageAtTime: $uptimeMillis")
+                return super.sendMessageAtTime(msg, uptimeMillis)
+            }
+
+            override fun dispatchMessage(msg: Message) {
+                printInfo("dispatchMessage: ${msg.getWhen()}")
+                super.dispatchMessage(msg)
+            }
+        }
         testHandler = Handler(Looper.getMainLooper())
 
         btnStart = findViewById(R.id.btn_start)
@@ -46,16 +58,18 @@ class TestActivity : AppCompatActivity() {
             }, 3000)
             testHandler.postDelayed({
                 printInfo("-END-")
-            }, 15000)
+            }, 16000)
 //            testHandler.postDelayed({
 //                pausableHandler.removeCallbacksAndMessages(null)
 //                printInfo("REMOVE ALL")
 //            }, 6000)
-            pausableHandler.postDelayed({
-                printInfo("Thread.sleep(6000) start")
-                SystemClock.sleep(6000)
-                printInfo("Thread.sleep(6000) end")
-            }, 1000)
+//            pausableHandler.postDelayed({
+//                printInfo("Thread.sleep(4000) start")
+//                SystemClock.sleep(4000)
+//                printInfo("Thread.sleep(4000) end")
+//            }, 1000)
+            pausableHandler.sendEmptyMessageAtTime(1, 0)
+            pausableHandler.sendEmptyMessageDelayed(2, 3000)
         }
 
         tvInfo = findViewById(R.id.tv_info)

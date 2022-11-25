@@ -9,9 +9,8 @@ import java.util.concurrent.locks.ReentrantReadWriteLock
 import kotlin.concurrent.read
 import kotlin.concurrent.write
 
-
 @Suppress("unused")
-class PausableHandler {
+open class PausableHandler{
     companion object {
         private const val TASK_BLOCKING_WATCH = false
         private const val TASK_BLOCKING_DURATION = 3000L   /* milliseconds */
@@ -50,21 +49,34 @@ class PausableHandler {
     }
 
     private val handler: InnerHandler
+    private val msgCallback = object : IMessageCallback {
+        override fun handleMessageCallback(msg: Message) {
+            this@PausableHandler.handleMessage(msg)
+        }
+
+        override fun dispatchMessageCallback(msg: Message) {
+            this@PausableHandler.dispatchMessage(msg)
+        }
+
+        override fun sendMessageAtTimeCallback(msg: Message, uptimeMillis: Long): Boolean {
+            return this@PausableHandler.sendMessageAtTime(msg, uptimeMillis)
+        }
+    }
 
     constructor() {
-        handler = InnerHandler()
+        handler = InnerHandler(msgCallback)
     }
 
     constructor(callback: Handler.Callback?) {
-        handler = InnerHandler(callback)
+        handler = InnerHandler(callback, msgCallback)
     }
 
     constructor(looper: Looper) {
-        handler = InnerHandler(looper)
+        handler = InnerHandler(looper, msgCallback)
     }
 
     constructor(looper: Looper, callback: Handler.Callback?) {
-        handler = InnerHandler(looper, callback)
+        handler = InnerHandler(looper, callback, msgCallback)
     }
 
     fun resume() = handler.resume()
@@ -77,9 +89,11 @@ class PausableHandler {
 
     fun waitingTaskSize(): Int = handler.waitingTaskSize()
 
-    open fun dispatchMessage(msg: Message) = handler.dispatchMessage(msg)
+    open fun dispatchMessage(msg: Message) = handler.dispatchMessageNew(msg)
 
-    open fun handleMessage(msg: Message) = handler.handleMessage(msg)
+    open fun handleMessage(msg: Message) {}
+
+    open fun sendMessageAtTime(msg: Message, uptimeMillis: Long): Boolean = handler.sendMessageAtTimeNew(msg, uptimeMillis)
 
     fun getMessageName(message: Message) = handler.getMessageName(message)
 
@@ -91,8 +105,7 @@ class PausableHandler {
 
     fun obtainMessage(what: Int, arg1: Int, arg2: Int): Message = handler.obtainMessage(what, arg1, arg2)
 
-    fun obtainMessage(what: Int, arg1: Int, arg2: Int, obj: Any?): Message =
-        handler.obtainMessage(what, arg1, arg2, obj)
+    fun obtainMessage(what: Int, arg1: Int, arg2: Int, obj: Any?): Message = handler.obtainMessage(what, arg1, arg2, obj)
 
     fun post(r: Runnable): Boolean = handler.post(r)
 
@@ -135,8 +148,6 @@ class PausableHandler {
     fun sendEmptyMessageAtTime(what: Int, uptimeMillis: Long): Boolean = handler.sendEmptyMessageAtTime(what, uptimeMillis)
 
     fun sendMessageDelayed(msg: Message, delayMillis: Long): Boolean = handler.sendMessageDelayed(msg, delayMillis)
-
-    open fun sendMessageAtTime(msg: Message, uptimeMillis: Long): Boolean = handler.sendMessageAtTime(msg, uptimeMillis)
 
     fun sendMessageAtFrontOfQueue(msg: Message): Boolean {
         if (handler.isPaused()) {
@@ -221,6 +232,11 @@ class PausableHandler {
 
     override fun toString(): String = handler.toString()
 
+    interface IMessageCallback {
+        fun handleMessageCallback(msg: Message)
+        fun dispatchMessageCallback(msg: Message)
+        fun sendMessageAtTimeCallback(msg: Message, uptimeMillis: Long): Boolean
+    }
     private class WaitingMsgTime(var delayTime: Long)
     private class RunningMsgTime(var whenTime: Long, var lastSumPauseTime: Long)
     private class InnerHandler : Handler {
@@ -230,12 +246,23 @@ class PausableHandler {
         private val runningQueue = LinkedList<Pair<Message, RunningMsgTime>>()
         private var waitingLock = ReentrantReadWriteLock()
         private var runningLock = ReentrantReadWriteLock()
+        private val msgCallback: IMessageCallback
 
+        constructor(msgCallback: IMessageCallback) : super() {
+            this.msgCallback = msgCallback
+        }
 
-        constructor() : super()
-        constructor(callback: Callback?) : super(callback)
-        constructor(looper: Looper) : super(looper)
-        constructor(looper: Looper, callback: Callback?) : super(looper, callback)
+        constructor(callback: Callback?, msgCallback: IMessageCallback) : super(callback) {
+            this.msgCallback = msgCallback
+        }
+
+        constructor(looper: Looper, msgCallback: IMessageCallback) : super(looper) {
+            this.msgCallback = msgCallback
+        }
+
+        constructor(looper: Looper, callback: Callback?, msgCallback: IMessageCallback) : super(looper, callback) {
+            this.msgCallback = msgCallback
+        }
 
         fun resume(): Long {
             var pauseDuration = 0L
@@ -259,7 +286,15 @@ class PausableHandler {
             }
         }
 
+        override fun handleMessage(msg: Message) {
+            msgCallback.handleMessageCallback(msg)
+        }
+
         override fun sendMessageAtTime(msg: Message, uptimeMillis: Long): Boolean {
+            return msgCallback.sendMessageAtTimeCallback(msg, uptimeMillis)
+        }
+
+        fun sendMessageAtTimeNew(msg: Message, uptimeMillis: Long): Boolean {
             if (startPauseTime == 0L) {
                 runningLock.write {
                     runningQueue.add(Pair(msg, RunningMsgTime(uptimeMillis, sumPauseDuration)))
@@ -274,6 +309,10 @@ class PausableHandler {
         }
 
         override fun dispatchMessage(msg: Message) {
+            msgCallback.dispatchMessageCallback(msg)
+        }
+
+        fun dispatchMessageNew(msg: Message) {
             val runningTime = runningLock.write {
                 runningQueue.ktRemoveIf { it.first === msg }?.second
             }
