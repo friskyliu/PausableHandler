@@ -15,18 +15,7 @@ open class PausableHandler{
         private const val TASK_BLOCKING_WATCH = false
         private const val TASK_BLOCKING_DURATION = 3000L   /* milliseconds */
 
-        private lateinit var blockingWatchHandler: Handler
-        private lateinit var blockingWatchThread: HandlerThread
-
         private var MAIN_THREAD_HANDLER: PausableHandler? = null
-
-        init {
-            if (TASK_BLOCKING_WATCH) {
-                blockingWatchThread = HandlerThread("TASK-BLOCKING-WATCH")
-                blockingWatchThread.start()
-                blockingWatchHandler = Handler(blockingWatchThread.looper)
-            }
-        }
 
         @JvmStatic
         fun createAsync(looper: Looper): PausableHandler = PausableHandler(looper)
@@ -247,6 +236,19 @@ open class PausableHandler{
         private var waitingLock = ReentrantReadWriteLock()
         private var runningLock = ReentrantReadWriteLock()
         private val msgCallback: IMessageCallback
+
+        companion object {
+            private lateinit var blockingWatchHandler: Handler
+            private lateinit var blockingWatchThread: HandlerThread
+
+            init {
+                if (TASK_BLOCKING_WATCH) {
+                    blockingWatchThread = HandlerThread("TASK-BLOCKING-WATCH")
+                    blockingWatchThread.start()
+                    blockingWatchHandler = Handler(blockingWatchThread.looper)
+                }
+            }
+        }
 
         constructor(msgCallback: IMessageCallback) : super() {
             this.msgCallback = msgCallback
