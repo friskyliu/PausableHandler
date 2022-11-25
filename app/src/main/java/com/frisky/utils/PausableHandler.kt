@@ -287,13 +287,16 @@ open class PausableHandler{
         }
 
         override fun handleMessage(msg: Message) {
+            //to PausableHandler.handleMessage
             msgCallback.handleMessageCallback(msg)
         }
 
         override fun sendMessageAtTime(msg: Message, uptimeMillis: Long): Boolean {
+            //to PausableHandler.sendMessageAtTime  -> InnerHandler.sendMessageAtTimeNew
             return msgCallback.sendMessageAtTimeCallback(msg, uptimeMillis)
         }
 
+        //call from PausableHandler.sendMessageAtTime
         fun sendMessageAtTimeNew(msg: Message, uptimeMillis: Long): Boolean {
             if (startPauseTime == 0L) {
                 runningLock.write {
@@ -309,9 +312,11 @@ open class PausableHandler{
         }
 
         override fun dispatchMessage(msg: Message) {
+            //to PausableHandler.dispatchMessage  -> InnerHandler.dispatchMessageNew
             msgCallback.dispatchMessageCallback(msg)
         }
 
+        //call from PausableHandler.dispatchMessage
         fun dispatchMessageNew(msg: Message) {
             val runningTime = runningLock.write {
                 runningQueue.ktRemoveIf { it.first === msg }?.second
