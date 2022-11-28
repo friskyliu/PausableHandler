@@ -99,13 +99,13 @@ open class PausableHandler{
 
     open fun sendMessageAtTime(msg: Message, uptimeMillis: Long): Boolean = handler.sendMessageAtTimeNew(msg, uptimeMillis)
 
-    fun getMessageName(message: Message) = handler.getMessageName(message)
+    fun getMessageName(message: Message): String = handler.getMessageName(message)
 
     fun obtainMessage(): Message = handler.obtainMessage()
 
-    fun obtainMessage(what: Int) = handler.obtainMessage(what)
+    fun obtainMessage(what: Int): Message = handler.obtainMessage(what)
 
-    fun obtainMessage(what: Int, obj: Any?) = handler.obtainMessage(what, obj)
+    fun obtainMessage(what: Int, obj: Any?): Message = handler.obtainMessage(what, obj)
 
     fun obtainMessage(what: Int, arg1: Int, arg2: Int): Message = handler.obtainMessage(what, arg1, arg2)
 
