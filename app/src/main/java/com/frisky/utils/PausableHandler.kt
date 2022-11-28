@@ -125,11 +125,10 @@ open class PausableHandler{
     @RequiresApi(Build.VERSION_CODES.P)
     fun postDelayed(r: Runnable, token: Any?, delayMillis: Long): Boolean = handler.postDelayed(r, token, delayMillis)
 
-    fun postAtFrontOfQueue(r: Runnable): Boolean {
-        TODO("to do")
-    }
+    fun postAtFrontOfQueue(r: Runnable): Boolean = handler.postAtFrontOfQueue(r)
 
     fun runWithScissors(r: Runnable, timeout: Long): Boolean {
+        /* return handler.runWithScissors(r, timeout) */
         TODO("to do")
     }
 
@@ -249,7 +248,9 @@ open class PausableHandler{
         TODO("to do")
     }
 
-    override fun toString(): String = handler.toString()
+    override fun toString(): String {
+        return "PausableHandler (${javaClass.name}) {${Integer.toHexString(System.identityHashCode(this))}}";
+    }
 
     private interface IMessageCallback {
         fun handleMessageCallback(msg: Message)
@@ -299,7 +300,7 @@ open class PausableHandler{
 
         fun resume(): Long {
             var pauseDuration = 0L
-            if (startPauseTime != 0L) {
+            if (isPaused()) {
                 pauseDuration = SystemClock.uptimeMillis() - startPauseTime
                 sumPauseDuration += pauseDuration
                 startPauseTime = 0L
@@ -331,17 +332,17 @@ open class PausableHandler{
 
         //call from PausableHandler.sendMessageAtTime
         fun sendMessageAtTimeNew(msg: Message, uptimeMillis: Long): Boolean {
-            if (startPauseTime == 0L) {
-                runningLock.write {
-                    runningQueue.add(Pair(msg, RunningMsgTime(uptimeMillis, sumPauseDuration)))
+            if (isPaused()) {
+                waitingLock.write {
+                    waitingQueue.add(Pair(msg, WaitingMsgTime(uptimeMillis - SystemClock.uptimeMillis())))
                 }
-                return super.sendMessageAtTime(msg, uptimeMillis)
+                return true
             }
 
-            waitingLock.write {
-                waitingQueue.add(Pair(msg, WaitingMsgTime(uptimeMillis - SystemClock.uptimeMillis())))
+            runningLock.write {
+                runningQueue.add(Pair(msg, RunningMsgTime(uptimeMillis, sumPauseDuration)))
             }
-            return true
+            return super.sendMessageAtTime(msg, uptimeMillis)
         }
 
         override fun dispatchMessage(msg: Message) {
@@ -355,11 +356,18 @@ open class PausableHandler{
                 runningQueue.ktRemoveIf { it.first === msg }?.second
             }
             if (runningTime == null) {
-                dispatchMessageNow(msg)
+                if (isPaused()) {
+                    val newMsg = Message.obtain(msg)
+                    waitingLock.write {
+                        waitingQueue.add(Pair(newMsg, WaitingMsgTime(0)))
+                    }
+                } else {
+                    dispatchMessageNow(msg)
+                }
                 return
             }
 
-            if (startPauseTime != 0L) {
+            if (isPaused()) {
                 val delayTime =
                     SystemClock.uptimeMillis() - startPauseTime + sumPauseDuration - runningTime.lastSumPauseTime
 
