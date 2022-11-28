@@ -181,15 +181,19 @@ open class PausableHandler{
     }
 
     fun removeEqualMessages(what: Int, obj: Any?) {
+        /*handler.removeEqualMessages(what, obj)
+        handler.removeCacheWhat(what, obj, true)*/
         TODO("to do")
     }
 
     fun removeCallbacksAndMessages(token: Any?) {
-        handler.removeCallbacksAndMessages(null)
-        handler.removeCacheObj(null)
+        handler.removeCallbacksAndMessages(token)
+        handler.removeCacheObj(token)
     }
 
     fun removeCallbacksAndEqualMessages(token: Any?) {
+        /*handler.removeCallbacksAndEqualMessages(token)
+        handler.removeCacheObj(token, true) */
         TODO("to do")
     }
 
@@ -202,6 +206,11 @@ open class PausableHandler{
     }
 
     fun hasMessagesOrCallbacks(): Boolean {
+        /*var ret = runningTaskSize() > 0 || waitingTaskSize() > 0
+        if (!ret) {
+            ret = handler.hasMessagesOrCallbacks()
+        }
+        return ret*/
         TODO("to do")
     }
 
@@ -214,6 +223,11 @@ open class PausableHandler{
     }
 
     fun hasEqualMessages(what: Int, obj: Any?): Boolean {
+        /*var ret = handler.hasMessageCacheWhat(what, obj, true)
+        if (!ret) {
+            ret = handler.hasEqualMessages(what, obj)
+        }
+        return ret*/
         TODO("to do")
     }
 
@@ -231,16 +245,18 @@ open class PausableHandler{
     fun dump(pw: Printer, prefix: String) = handler.dump(pw, prefix)
 
     fun dumpMine(pw: Printer, prefix: String) {
+        /*handler.dumpMine(pw, prefix)*/
         TODO("to do")
     }
 
     override fun toString(): String = handler.toString()
 
-    interface IMessageCallback {
+    private interface IMessageCallback {
         fun handleMessageCallback(msg: Message)
         fun dispatchMessageCallback(msg: Message)
         fun sendMessageAtTimeCallback(msg: Message, uptimeMillis: Long): Boolean
     }
+
     private class WaitingMsgTime(var delayTime: Long)
     private class RunningMsgTime(var whenTime: Long, var lastSumPauseTime: Long)
     private class InnerHandler : Handler {
