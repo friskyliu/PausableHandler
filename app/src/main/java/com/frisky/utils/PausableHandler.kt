@@ -19,6 +19,7 @@ import android.os.*
 import android.util.Log
 import android.util.Printer
 import androidx.annotation.RequiresApi
+import java.lang.Deprecated
 import java.util.*
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kotlin.concurrent.read
@@ -249,7 +250,7 @@ open class PausableHandler{
     }
 
     override fun toString(): String {
-        return "PausableHandler (${javaClass.name}) {${Integer.toHexString(System.identityHashCode(this))}}";
+        return "PausableHandler (${javaClass.name}) ${Integer.toHexString(System.identityHashCode(this))}";
     }
 
     private interface IMessageCallback {
@@ -358,9 +359,7 @@ open class PausableHandler{
             if (runningTime == null) {
                 if (isPaused()) {
                     val newMsg = Message.obtain(msg)
-                    waitingLock.write {
-                        waitingQueue.add(Pair(newMsg, WaitingMsgTime(0)))
-                    }
+                    addWaitingFirst(newMsg)
                 } else {
                     dispatchMessageNow(msg)
                 }
@@ -415,12 +414,12 @@ open class PausableHandler{
         fun removeCacheObj(token: Any?, equal: Boolean = false) {
             waitingLock.write {
                 waitingQueue.removeAll {
-                    objEquals(it.first.obj, token, equal)
+                    tokenEquals(it.first.obj, token, equal)
                 }
             }
             runningLock.write {
                 runningQueue.removeAll {
-                    objEquals(it.first.obj, token, equal)
+                    tokenEquals(it.first.obj, token, equal)
                 }
             }
         }
@@ -429,14 +428,14 @@ open class PausableHandler{
             waitingLock.write {
                 waitingQueue.removeAll {
                     val msg = it.first
-                    msg.what == what && objEquals(msg.obj, token, equal)
+                    msg.what == what && tokenEquals(msg.obj, token, equal)
                 }
             }
 
             runningLock.write {
                 runningQueue.removeAll {
                     val msg = it.first
-                    msg.what == what && objEquals(msg.obj, token, equal)
+                    msg.what == what && tokenEquals(msg.obj, token, equal)
                 }
             }
         }
@@ -445,21 +444,21 @@ open class PausableHandler{
             waitingLock.write {
                 waitingQueue.removeAll {
                     val msg = it.first
-                    msg.callback === runnable && objEquals(msg.obj, token, equal)
+                    msg.callback === runnable && tokenEquals(msg.obj, token, equal)
                 }
             }
 
             runningLock.write {
                 runningQueue.removeAll {
                     val msg = it.first
-                    msg.callback === runnable && objEquals(msg.obj, token, equal)
+                    msg.callback === runnable && tokenEquals(msg.obj, token, equal)
                 }
             }
         }
 
         fun hasMessageCacheObj(token: Any?, equal: Boolean = false): Boolean {
             return waitingLock.read {
-                waitingQueue.find { objEquals(it.first.obj, token, equal) } != null
+                waitingQueue.find { tokenEquals(it.first.obj, token, equal) } != null
             }
         }
 
@@ -467,7 +466,7 @@ open class PausableHandler{
             return waitingLock.read {
                 waitingQueue.find {
                     val msg = it.first
-                    msg.what == what && objEquals(msg.obj, token, equal)
+                    msg.what == what && tokenEquals(msg.obj, token, equal)
                 } != null
             }
         }
@@ -476,7 +475,7 @@ open class PausableHandler{
             return waitingLock.read {
                 waitingQueue.find {
                     val msg = it.first
-                    msg.callback === runnable && objEquals(msg.obj, token, equal)
+                    msg.callback === runnable && tokenEquals(msg.obj, token, equal)
                 } != null
             }
         }
@@ -502,7 +501,7 @@ open class PausableHandler{
             return null
         }
 
-        private fun objEquals(obj: Any?, token: Any?, equal: Boolean): Boolean {
+        private fun tokenEquals(obj: Any?, token: Any?, equal: Boolean): Boolean {
             if (equal) {
                 return (token == null && obj == null) || token === obj
             }
