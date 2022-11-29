@@ -19,7 +19,6 @@ import android.os.*
 import android.util.Log
 import android.util.Printer
 import androidx.annotation.RequiresApi
-import java.lang.Deprecated
 import java.util.*
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kotlin.concurrent.read
@@ -68,10 +67,20 @@ open class PausableHandler{
         }
     }
 
+    @Deprecated(
+        "Use PausableHandler(Looper) instead.",
+        ReplaceWith("PausableHandler(Looper)"),
+        level = DeprecationLevel.WARNING
+    )
     constructor() {
         handler = InnerHandler(msgCallback)
     }
 
+    @Deprecated(
+        "Use PausableHandler(Looper, Handler.Callback?) instead.",
+        ReplaceWith("PausableHandler(Looper, Handler.Callback?)"),
+        level = DeprecationLevel.WARNING
+    )
     constructor(callback: Handler.Callback?) {
         handler = InnerHandler(callback, msgCallback)
     }
@@ -128,11 +137,6 @@ open class PausableHandler{
 
     fun postAtFrontOfQueue(r: Runnable): Boolean = handler.postAtFrontOfQueue(r)
 
-    fun runWithScissors(r: Runnable, timeout: Long): Boolean {
-        /* return handler.runWithScissors(r, timeout) */
-        TODO("to do")
-    }
-
     fun removeCallbacks(r: Runnable) {
         handler.removeCacheCallback(r, null)
         handler.removeCallbacks(r)
@@ -161,15 +165,6 @@ open class PausableHandler{
         return handler.sendMessageAtFrontOfQueue(msg)
     }
 
-    fun executeOrSendMessage(msg: Message): Boolean {
-        /* if (handler.isPaused()) {
-             handler.sendMessage(msg)
-             return true
-         }
-         return handler.executeOrSendMessage(msg) */
-        TODO("to do")
-    }
-
     fun removeMessages(what: Int) {
         handler.removeMessages(what)
         handler.removeCacheWhat(what, null)
@@ -180,21 +175,9 @@ open class PausableHandler{
         handler.removeCacheWhat(what, obj)
     }
 
-    fun removeEqualMessages(what: Int, obj: Any?) {
-        /*handler.removeEqualMessages(what, obj)
-        handler.removeCacheWhat(what, obj, true)*/
-        TODO("to do")
-    }
-
     fun removeCallbacksAndMessages(token: Any?) {
         handler.removeCallbacksAndMessages(token)
         handler.removeCacheObj(token)
-    }
-
-    fun removeCallbacksAndEqualMessages(token: Any?) {
-        /*handler.removeCallbacksAndEqualMessages(token)
-        handler.removeCacheObj(token, true) */
-        TODO("to do")
     }
 
     fun hasMessages(what: Int): Boolean {
@@ -205,30 +188,12 @@ open class PausableHandler{
         return ret
     }
 
-    fun hasMessagesOrCallbacks(): Boolean {
-        /*var ret = runningTaskSize() > 0 || waitingTaskSize() > 0
-        if (!ret) {
-            ret = handler.hasMessagesOrCallbacks()
-        }
-        return ret*/
-        TODO("to do")
-    }
-
     fun hasMessages(what: Int, obj: Any?): Boolean {
         var ret = handler.hasMessageCacheWhat(what, obj)
         if (!ret) {
             ret = handler.hasMessages(what, obj)
         }
         return ret
-    }
-
-    fun hasEqualMessages(what: Int, obj: Any?): Boolean {
-        /*var ret = handler.hasMessageCacheWhat(what, obj, true)
-        if (!ret) {
-            ret = handler.hasEqualMessages(what, obj)
-        }
-        return ret*/
-        TODO("to do")
     }
 
     @RequiresApi(Build.VERSION_CODES.Q)
@@ -243,11 +208,6 @@ open class PausableHandler{
     fun getLooper(): Looper = handler.getLooper()
 
     fun dump(pw: Printer, prefix: String) = handler.dump(pw, prefix)
-
-    fun dumpMine(pw: Printer, prefix: String) {
-        /*handler.dumpMine(pw, prefix)*/
-        TODO("to do")
-    }
 
     override fun toString(): String {
         return "PausableHandler (${javaClass.name}) ${Integer.toHexString(System.identityHashCode(this))}";

@@ -15,7 +15,7 @@ class PausableHandler {
         /** Task Bocking watch switch */
         private const val TASK_BLOCKING_WATCH = true
         private const val TASK_BLOCKING_DURATION = 3000L   /* milliseconds */
-        // ... other code ...
+        // ... other fun same as Handler...
     }
     
     // ... other code ...
@@ -30,10 +30,8 @@ class PausableHandler {
 
     fun waitingTaskSize(): Int = handler.waitingTaskSize()
 
-    // ... other code ...
+    // ... other fun same as Handler ...
 }
 ```
 
------------
-
-
+------
